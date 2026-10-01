@@ -175,12 +175,18 @@ TensorRTDepthAnything::TensorRTDepthAnything(
 
   // Get input dimensions
   const auto input_dims = trt_common_->getBindingDimensions(0);
-  const int input_channels = input_dims.d[1];
-  input_height_ = input_dims.d[2]; 
-  input_width_ = input_dims.d[3];
+  if (input_dims.nbDims < 3) {
+    throw std::runtime_error("Expected TensorRT input tensor to have at least C,H,W dimensions");
+  }
+  const int input_channels = input_dims.d[input_dims.nbDims - 3];
+  input_height_ = input_dims.d[input_dims.nbDims - 2];
+  input_width_ = input_dims.d[input_dims.nbDims - 1];
+  if (input_channels != 3) {
+    throw std::runtime_error("Expected TensorRT input tensor to have 3 channels");
+  }
   
   // Allocate input memory
-  const size_t input_elem_num = batch_size_ * input_channels * input_height_ * input_width_;
+  const size_t input_elem_num = volumeFromDims(input_dims, batch_size_);
   input_d_ = cuda_utils::make_unique<float[]>(input_elem_num);
 
 }
@@ -263,8 +269,8 @@ void TensorRTDepthAnything::preprocess(const std::vector<cv::Mat> & images)
   }
   trt_common_->setBindingDimensions(0, input_dims);
 
-  input_height_ = input_dims.d[2];
-  input_width_ = input_dims.d[3];
+  input_height_ = input_dims.d[input_dims.nbDims - 2];
+  input_width_ = input_dims.d[input_dims.nbDims - 1];
   scale_x_ = static_cast<double>(input_width_) / static_cast<double>(src_width_);
   scale_y_ = static_cast<double>(input_height_) / static_cast<double>(src_height_);
 
